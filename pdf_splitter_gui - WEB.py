@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 import shutil
 import re
+import tkinter as tk
+from tkinter import filedialog
 
 st.set_page_config(page_title="PDF Splitter", layout="centered")
 st.title("📄 PDF Splitter - Student Reports")
@@ -31,6 +33,11 @@ def move_to_output_dir(source_path, base_output_dir, student_id):
     target_path = student_folder / source_path.name
     shutil.copy(source_path, target_path)
     return target_path
+
+def browse_directory():
+    root = tk.Tk()
+    root.withdraw()
+    return filedialog.askdirectory()
 
 # ----------------------------- Splitting Functions ----------------------------- #
 def split_registered_courses(doc):
@@ -81,7 +88,15 @@ with col2:
     history_pdf = st.file_uploader("History (starts with ID)", type="pdf", key="hist")
     schedual_pdf = st.file_uploader("Schedual (ID inside brackets)", type="pdf", key="sched")
 
-base_output_dir = st.text_input("Optional: Target folder path to collect output by student ID")
+output_folder_clicked = st.button("Select Output Folder")
+base_output_dir = ""
+
+if output_folder_clicked:
+    base_output_dir = browse_directory()
+    st.session_state["output_folder"] = base_output_dir
+
+if "output_folder" in st.session_state:
+    st.success(f"Output folder selected: {st.session_state['output_folder']}")
 
 if st.button("Split PDFs"):
     with st.spinner("Processing PDFs..."):
@@ -101,9 +116,9 @@ if st.button("Split PDFs"):
 
         final_outputs = []
         for student_id, path in all_outputs:
-            if base_output_dir:
+            if "output_folder" in st.session_state:
                 try:
-                    target = move_to_output_dir(path, Path(base_output_dir), student_id)
+                    target = move_to_output_dir(path, Path(st.session_state["output_folder"]), student_id)
                     final_outputs.append((student_id, target))
                 except Exception as e:
                     st.error(f"Failed to move {path.name}: {e}")
