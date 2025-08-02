@@ -3,6 +3,7 @@ import fitz  # PyMuPDF
 import streamlit as st
 import tempfile
 from pathlib import Path
+import shutil
 import re
 
 st.set_page_config(page_title="PDF Splitter", layout="centered")
@@ -23,6 +24,13 @@ def save_pdf(new_doc, student_id, filename):
     path = folder / filename
     new_doc.save(path)
     return path
+
+def move_to_output_dir(source_path, base_output_dir, student_id):
+    student_folder = base_output_dir / student_id
+    student_folder.mkdir(parents=True, exist_ok=True)
+    target_path = student_folder / source_path.name
+    shutil.copy(source_path, target_path)
+    return target_path
 
 # ----------------------------- Splitting Functions ----------------------------- #
 def split_registered_courses(doc):
@@ -73,6 +81,8 @@ with col2:
     history_pdf = st.file_uploader("History (starts with ID)", type="pdf", key="hist")
     schedual_pdf = st.file_uploader("Schedual (ID inside brackets)", type="pdf", key="sched")
 
+base_output_dir = st.text_input("Optional: Target folder path to collect output by student ID")
+
 if st.button("Split PDFs"):
     with st.spinner("Processing PDFs..."):
         all_outputs = []
@@ -89,10 +99,21 @@ if st.button("Split PDFs"):
             doc = fitz.open(stream=schedual_pdf.read(), filetype="pdf")
             all_outputs += split_grouped_pdf(doc, extract_student_id_brackets, "02-Schedual")
 
-    if all_outputs:
-        st.success(f"✅ Split complete! {len(all_outputs)} files generated.")
-        st.markdown("### Download Files:")
+        final_outputs = []
         for student_id, path in all_outputs:
+            if base_output_dir:
+                try:
+                    target = move_to_output_dir(path, Path(base_output_dir), student_id)
+                    final_outputs.append((student_id, target))
+                except Exception as e:
+                    st.error(f"Failed to move {path.name}: {e}")
+            else:
+                final_outputs.append((student_id, path))
+
+    if final_outputs:
+        st.success(f"✅ Split complete! {len(final_outputs)} files generated.")
+        st.markdown("### Download Files:")
+        for student_id, path in final_outputs:
             with open(path, "rb") as f:
                 st.download_button(
                     label=f"Download {path.name}",
