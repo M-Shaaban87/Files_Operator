@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 import shutil
 import re
+import tkinter as tk
+from tkinter import filedialog
 
 st.set_page_config(page_title="PDF Splitter", layout="centered")
 st.title("📄 PDF Splitter - Student Reports")
@@ -24,6 +26,13 @@ def save_pdf(new_doc, student_id, filename, base_output_dir):
     path = folder / filename
     new_doc.save(path)
     return path
+
+def browse_folder():
+    root = tk.Tk()
+    root.withdraw()
+    folder_selected = filedialog.askdirectory()
+    root.destroy()
+    return folder_selected
 
 # ----------------------------- Splitting Functions ----------------------------- #
 def split_registered_courses(doc, base_output_dir):
@@ -74,13 +83,19 @@ with col2:
     history_pdf = st.file_uploader("History (starts with ID)", type="pdf", key="hist")
     schedual_pdf = st.file_uploader("Schedual (ID inside brackets)", type="pdf", key="sched")
 
-base_output_dir_str = st.text_input("Enter a local output directory to save all split files:")
+if st.button("Browse Output Folder"):
+    folder_path = browse_folder()
+    if folder_path:
+        st.session_state["output_folder"] = folder_path
+
+if "output_folder" in st.session_state:
+    st.success(f"Output folder selected: {st.session_state['output_folder']}")
 
 if st.button("Split PDFs"):
-    if not base_output_dir_str:
-        st.error("Please provide an output directory to save the split files.")
+    if "output_folder" not in st.session_state:
+        st.error("Please select an output folder using the 'Browse Output Folder' button.")
     else:
-        base_output_dir = Path(base_output_dir_str)
+        base_output_dir = Path(st.session_state["output_folder"])
         with st.spinner("Processing PDFs..."):
             all_outputs = []
             if reg_pdf:
@@ -96,4 +111,4 @@ if st.button("Split PDFs"):
                 doc = fitz.open(stream=schedual_pdf.read(), filetype="pdf")
                 all_outputs += split_grouped_pdf(doc, extract_student_id_brackets, "02-Schedual", base_output_dir)
 
-        st.success(f"✅ Split complete! {len(all_outputs)} files saved to: {base_output_dir_str}")
+        st.success(f"✅ Split complete! {len(all_outputs)} files saved to: {base_output_dir}")
