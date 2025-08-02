@@ -18,33 +18,26 @@ def extract_student_id_brackets(text):
     match = re.search(r'\[(\d+)\]', text)
     return match.group(1) if match else None
 
-def save_pdf(new_doc, student_id, filename):
-    folder = Path(tempfile.gettempdir()) / student_id
+def save_pdf(new_doc, student_id, filename, base_output_dir):
+    folder = base_output_dir / student_id
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / filename
     new_doc.save(path)
     return path
 
-def move_to_output_dir(source_path, base_output_dir, student_id):
-    student_folder = base_output_dir / student_id
-    student_folder.mkdir(parents=True, exist_ok=True)
-    target_path = student_folder / source_path.name
-    shutil.copy(source_path, target_path)
-    return target_path
-
 # ----------------------------- Splitting Functions ----------------------------- #
-def split_registered_courses(doc):
+def split_registered_courses(doc, base_output_dir):
     paths = []
     for i, page in enumerate(doc):
         text = page.get_text()
         student_id = extract_student_id(text) or f"Unknown_{i+1}"
         new_pdf = fitz.open()
         new_pdf.insert_pdf(doc, from_page=i, to_page=i)
-        path = save_pdf(new_pdf, student_id, f"01-RegisteredCourses {student_id}.pdf")
+        path = save_pdf(new_pdf, student_id, f"01-RegisteredCourses {student_id}.pdf", base_output_dir)
         paths.append((student_id, path))
     return paths
 
-def split_grouped_pdf(doc, extract_id_func, prefix):
+def split_grouped_pdf(doc, extract_id_func, prefix, base_output_dir):
     paths = []
     student_ranges = []
     current_range = []
@@ -65,7 +58,7 @@ def split_grouped_pdf(doc, extract_id_func, prefix):
         new_pdf = fitz.open()
         for page_num in page_range:
             new_pdf.insert_pdf(doc, from_page=page_num, to_page=page_num)
-        path = save_pdf(new_pdf, student_id, f"{prefix} {student_id}.pdf")
+        path = save_pdf(new_pdf, student_id, f"{prefix} {student_id}.pdf", base_output_dir)
         paths.append((student_id, path))
     return paths
 
@@ -81,45 +74,26 @@ with col2:
     history_pdf = st.file_uploader("History (starts with ID)", type="pdf", key="hist")
     schedual_pdf = st.file_uploader("Schedual (ID inside brackets)", type="pdf", key="sched")
 
-base_output_dir = st.text_input("Enter a local output directory (only applies when running locally):")
+base_output_dir_str = st.text_input("Enter a local output directory to save all split files:")
 
 if st.button("Split PDFs"):
-    with st.spinner("Processing PDFs..."):
-        all_outputs = []
-        if reg_pdf:
-            doc = fitz.open(stream=reg_pdf.read(), filetype="pdf")
-            all_outputs += split_registered_courses(doc)
-        if cgpa_pdf:
-            doc = fitz.open(stream=cgpa_pdf.read(), filetype="pdf")
-            all_outputs += split_grouped_pdf(doc, extract_student_id, "02-CGPAProgress")
-        if history_pdf:
-            doc = fitz.open(stream=history_pdf.read(), filetype="pdf")
-            all_outputs += split_grouped_pdf(doc, extract_student_id, "01-history")
-        if schedual_pdf:
-            doc = fitz.open(stream=schedual_pdf.read(), filetype="pdf")
-            all_outputs += split_grouped_pdf(doc, extract_student_id_brackets, "02-Schedual")
-
-        final_outputs = []
-        for student_id, path in all_outputs:
-            if base_output_dir:
-                try:
-                    target = move_to_output_dir(path, Path(base_output_dir), student_id)
-                    final_outputs.append((student_id, target))
-                except Exception as e:
-                    st.error(f"Failed to move {path.name}: {e}")
-            else:
-                final_outputs.append((student_id, path))
-
-    if final_outputs:
-        st.success(f"✅ Split complete! {len(final_outputs)} files generated.")
-        st.markdown("### Download Files:")
-        for student_id, path in final_outputs:
-            with open(path, "rb") as f:
-                st.download_button(
-                    label=f"Download {path.name}",
-                    data=f.read(),
-                    file_name=path.name,
-                    mime="application/pdf"
-                )
+    if not base_output_dir_str:
+        st.error("Please provide an output directory to save the split files.")
     else:
-        st.warning("No files were processed. Please upload valid PDFs.")
+        base_output_dir = Path(base_output_dir_str)
+        with st.spinner("Processing PDFs..."):
+            all_outputs = []
+            if reg_pdf:
+                doc = fitz.open(stream=reg_pdf.read(), filetype="pdf")
+                all_outputs += split_registered_courses(doc, base_output_dir)
+            if cgpa_pdf:
+                doc = fitz.open(stream=cgpa_pdf.read(), filetype="pdf")
+                all_outputs += split_grouped_pdf(doc, extract_student_id, "02-CGPAProgress", base_output_dir)
+            if history_pdf:
+                doc = fitz.open(stream=history_pdf.read(), filetype="pdf")
+                all_outputs += split_grouped_pdf(doc, extract_student_id, "01-history", base_output_dir)
+            if schedual_pdf:
+                doc = fitz.open(stream=schedual_pdf.read(), filetype="pdf")
+                all_outputs += split_grouped_pdf(doc, extract_student_id_brackets, "02-Schedual", base_output_dir)
+
+        st.success(f"✅ Split complete! {len(all_outputs)} files saved to: {base_output_dir_str}")
