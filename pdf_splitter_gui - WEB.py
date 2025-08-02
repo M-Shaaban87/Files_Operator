@@ -1,5 +1,5 @@
 import os
-import PyMuPDF as fitz
+import fitz  # PyMuPDF
 import streamlit as st
 import tempfile
 from pathlib import Path
