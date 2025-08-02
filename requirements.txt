@@ -1,7 +1,2 @@
-streamlit
-pandas
-numpy
-matplotlib
-scikit-learn
-statsmodels
-openpyxl
+streamlit>=1.32.0
+PyMuPDF>=1.21.1
